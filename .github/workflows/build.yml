@@ -1,6 +1,14 @@
 # 「阿B听书·改」自用改造版云端构建。
-# 用法：把本仓库 push 上来（或在 Actions 页手动 Run workflow）→
-#       等构建完成 → 该次运行页面底部 Artifacts 里下载 abts-custom-apk。
+#
+# 下载请走 Releases（公开直链、无需登录、支持多线程/断点续传）：
+#   https://github.com/bainiangudualex-cyber/abts/releases/latest
+# 或固定直链：
+#   https://github.com/bainiangudualex-cyber/abts/releases/download/v1.2.2-custom/abts-custom-arm64.apk
+#
+# 为什么只产一个 arm64 包：Actions artifact 需登录 + 临时签名 URL，
+# 单线程约 40~55KB/s，40MB 要十几分钟；Release asset 约 14MB 且能用
+# IDM / aria2 多线程加速。绝大多数手机都是 arm64-v8a。
+#
 # 包名已是 dev.pages.abts.custom，可与官方版同时安装，不需要卸载。
 # 注意：仓库没有 key.properties，产物用 debug 签名；每次 CI 生成的
 #       debug 证书不同，重装新包若提示「应用未安装」需先卸载旧包。
@@ -11,8 +19,9 @@ on:
   push:
     branches: [main]
 
+# 发 Release 需要写权限（默认 GITHUB_TOKEN 只有 read）
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -43,17 +52,32 @@ jobs:
       - name: pub get
         run: flutter pub get
 
-      # 按 ABI 分包，手机一般只需要 arm64-v8a 那个（体积最小）
-      - name: Build release APK
-        run: flutter build apk --release --split-per-abi
+      # 只构建 arm64：产物是单个 app-release.apk（约 14MB），
+      # 复制成固定文件名，方便 Release 直链长期使用。
+      - name: Build release APK (arm64 only)
+        run: |
+          flutter build apk --release --target-platform android-arm64
+          APK=$(ls build/app/outputs/flutter-apk/*.apk | head -1)
+          cp "$APK" abts-custom-arm64.apk
+          ls -lh abts-custom-arm64.apk
 
-      - name: Upload APK
+      - name: Upload artifact (备用)
         uses: actions/upload-artifact@v4
         with:
           name: abts-custom-apk
-          path: build/app/outputs/flutter-apk/*.apk
+          path: abts-custom-arm64.apk
           if-no-files-found: error
           retention-days: 30
 
-      - name: Show outputs
-        run: ls -lh build/app/outputs/flutter-apk/*.apk
+      # Release asset 是公开直链，无需登录、可多线程下载。
+      # --clobber 让重复构建覆盖同一 tag 下的旧文件，不会失败。
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v1.2.2-custom abts-custom-arm64.apk \
+            --target "$GITHUB_SHA" \
+            --title "阿B听书·改（自用）" \
+            --notes "自用改造版：双开包名 / 网易云式通知 / 0.05 倍速 / SRT 文稿同步。仅 arm64-v8a。" \
+            --clobber
+          gh release view v1.2.2-custom --json url -q .url
