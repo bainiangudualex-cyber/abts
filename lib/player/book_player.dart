@@ -901,7 +901,7 @@ class BookPlayer extends ChangeNotifier {
     h.mediaItem.add(
       MediaItem(
         id: '${_book!.bvid}/${chapter.cid}',
-        title: '第 ${chapter.page} 章 · ${chapter.part}',
+        title: chapter.title,
         artist: _book!.cleanTitle,
         album: _book!.cleanTitle,
         artUri: pic.isEmpty ? null : Uri.tryParse(pic),

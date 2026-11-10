@@ -319,7 +319,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                     ),
                             ),
                       title: Text(
-                        '${c.page} · ${c.part}',
+                        c.shortTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -428,13 +428,12 @@ class _PlayerPageState extends State<PlayerPage> {
           SizedBox(height: dense ? 3 : 6),
           if (chapter != null)
             Text(
-              '第 ${chapter.page} 章 · ${chapter.part}',
+              chapter.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style:  TextStyle(
                   fontSize: 13, color: AppTheme.textSub),
-            ),
-        ],
+            ),        ],
       ),
     );
   }
@@ -834,7 +833,7 @@ class _PlayerPageState extends State<PlayerPage> {
       bvid: book.bvid,
       cid: chapter.cid,
       bookTitle: book.cleanTitle,
-      chapterTitle: '第 ${chapter.page} 章 · ${chapter.part}',
+      chapterTitle: chapter.title,
       positionMs: player.currentPosition.inMilliseconds,
     );
   }
