@@ -491,7 +491,7 @@ Text(
                     Text(
                       chapter == null
                           ? book.cleanTitle
-                          : '第 ${chapter.page} 章 · ${chapter.part}',
+                          : chapter.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -634,7 +634,7 @@ Text(
       cid: c.cid,
       url: url,
       bookTitle: book.cleanTitle,
-      chapterTitle: '${c.page} · ${c.part}',
+      chapterTitle: c.shortTitle,
       cover: book.pic,
       durationSec: c.duration,
       headers: player.downloadHeaders,
@@ -688,15 +688,10 @@ class _ChapterTile extends StatelessWidget {
     required this.onCache,
   });
 
-  /// 标题自带序号（01xxx / 第 1 章 / P1 / 1 · xxx）时不再重复加序号
-  static final RegExp _ownIndex = RegExp(
-    r'^\s*(?:第\s*[0-9一二三四五六七八九十百千零两]+\s*[章集回话期节]'
-    r'|[Pp]\s*[0-9]{1,4}\b'
-    r'|[0-9]{1,4}\s*[.·、:：)\-—]'
-    r'|[0-9]{1,4}(?=\s*[^\s0-9]))',
-  );
-
-  bool get _hasOwnIndex => _ownIndex.hasMatch(chapter.part.trim());
+  /// 标题自带序号（01xxx / 第 1 章 / P1 / 1 · xxx）时不再重复加序号。
+  /// 正则统一放到 Chapter.ownIndexPattern，避免两处漂移。
+  bool get _hasOwnIndex =>
+      Chapter.ownIndexPattern.hasMatch(chapter.part.trim());
 
   @override
   Widget build(BuildContext context) {
@@ -749,7 +744,7 @@ class _ChapterTile extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                chapter.part,
+                chapter.shortTitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
