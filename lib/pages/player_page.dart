@@ -14,10 +14,8 @@ import '../core/theme/tv_mode.dart';
 import '../models/book.dart';
 import '../models/chapter.dart';
 import '../player/book_player.dart';
-import '../player/media_controls.dart';
 import '../utils/format.dart';
 import '../widgets/book_cover.dart';
-import '../widgets/subtitle_sheet.dart';
 import 'book_detail_page.dart';
 import 'cache_sheet.dart';
 
@@ -40,19 +38,6 @@ class _PlayerPageState extends State<PlayerPage> {
   BookPlayer? _playerRef;
 
   @override
-  void initState() {
-    super.initState();
-    // 通知栏「词」按钮 → 打开文稿面板（播放页已在前台时）
-    lyricRequest.addListener(_onLyricRequest);
-  }
-
-  void _onLyricRequest() {
-    final player = _playerRef;
-    if (!mounted || player == null) return;
-    _openSubtitle(player);
-  }
-
-  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _playerRef = context.read<BookPlayer>();
@@ -60,18 +45,8 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   void dispose() {
-    lyricRequest.removeListener(_onLyricRequest);
     _playerRef?.flushProgress();
     super.dispose();
-  }
-
-  /// 打开文稿同步面板
-  void _openSubtitle(BookPlayer player) {
-    final book = player.book;
-    final chapter = player.currentChapter;
-    if (book == null || chapter == null) return;
-    SubtitleSheet.show(context,
-        player: player, book: book, chapter: chapter);
   }
 
   @override
@@ -319,7 +294,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                     ),
                             ),
                       title: Text(
-                        c.shortTitle,
+                        '${c.page} · ${c.part}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -428,12 +403,13 @@ class _PlayerPageState extends State<PlayerPage> {
           SizedBox(height: dense ? 3 : 6),
           if (chapter != null)
             Text(
-              chapter.title,
+              '第 ${chapter.page} 章 · ${chapter.part}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style:  TextStyle(
                   fontSize: 13, color: AppTheme.textSub),
-            ),        ],
+            ),
+        ],
       ),
     );
   }
@@ -833,34 +809,28 @@ class _PlayerPageState extends State<PlayerPage> {
       bvid: book.bvid,
       cid: chapter.cid,
       bookTitle: book.cleanTitle,
-      chapterTitle: chapter.title,
+      chapterTitle: '第 ${chapter.page} 章 · ${chapter.part}',
       positionMs: player.currentPosition.inMilliseconds,
     );
   }
 
-  /// 量化到 0.05 的整数倍，避免滑杆浮点误差出现 1.2300000001x
-  static double _snapRate(double v) {
-    final steps =
-        (v.clamp(BookPlayer.minRate, BookPlayer.maxRate) * 20).round();
-    return (steps / 20)
-        .clamp(BookPlayer.minRate, BookPlayer.maxRate)
-        .toDouble();
-  }
-
-  /// 倍速弹窗：0.5x~3.0x，0.05 步进。
-  /// 底层 BookPlayer.setRate 本来就收任意 double 并持久化，
-  /// 原版只是把 UI 砍成 11 个固定档位，这里把滑杆加回来。
+  /// 倍速弹窗：滑轨拖动，0.05x 一档（0.5x ~ 3.0x）
+  ///
+  /// 拖动期间按 120ms 节流下发音速（能边拖边听出快慢），松手时无条件
+  /// 落定最终值。原版是固定档位列表，点一下换一档，没法微调。
   void _showSpeedSheet(BookPlayer player) {
+    // 量化到 0.05 的整数倍，避免 Slider 初值落在档位之间来回吸附
+    double draft = (player.rate.clamp(0.5, 3.0) * 20).round() / 20;
+    DateTime lastApply = DateTime.fromMillisecondsSinceEpoch(0);
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setSheet) {
-            final rate = player.rate;
             return SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -876,82 +846,50 @@ class _PlayerPageState extends State<PlayerPage> {
                         ),
                         const Spacer(),
                         Text(
-                          '步进 0.05',
+                          _speedLabel(draft),
                           style: TextStyle(
-                              fontSize: 12, color: AppTheme.textSub),
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.accent,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${rate.toStringAsFixed(2)}x',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.accent,
+                    const SizedBox(height: 4),
+                    Slider(
+                      value: draft,
+                      min: 0.5,
+                      max: 3.0,
+                      divisions: 50, // (3.0 - 0.5) / 0.05 = 50 档
+                      label: _speedLabel(draft),
+                      onChanged: (v) {
+                        setSheet(() => draft = v);
+                        final now = DateTime.now();
+                        if (now.difference(lastApply).inMilliseconds >= 120) {
+                          lastApply = now;
+                          player.setRate(v);
+                        }
+                      },
+                      onChangeEnd: (v) => player.setRate(v),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('0.5x',
+                              style: TextStyle(
+                                  fontSize: 12, color: AppTheme.textHint)),
+                          Text('1.75x',
+                              style: TextStyle(
+                                  fontSize: 12, color: AppTheme.textHint)),
+                          Text('3.0x',
+                              style: TextStyle(
+                                  fontSize: 12, color: AppTheme.textHint)),
+                        ],
                       ),
                     ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.remove_circle_outline),
-                          color: AppTheme.accent,
-                          onPressed: () {
-                            player.setRate(_snapRate(rate - 0.05));
-                            setSheet(() {});
-                          },
-                        ),
-                        Expanded(
-                          child: Slider(
-                            value: rate.clamp(
-                                BookPlayer.minRate, BookPlayer.maxRate),
-                            min: BookPlayer.minRate,
-                            max: BookPlayer.maxRate,
-                            divisions: 50,
-                            label: '${rate.toStringAsFixed(2)}x',
-                            onChanged: (v) {
-                              player.setRate(_snapRate(v));
-                              setSheet(() {});
-                            },
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.add_circle_outline),
-                          color: AppTheme.accent,
-                          onPressed: () {
-                            player.setRate(_snapRate(rate + 0.05));
-                            setSheet(() {});
-                          },
-                        ),
-                      ],
-                    ),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 8,
-                      children: [
-                        for (final r in const <double>[
-                          0.75,
-                          1.0,
-                          1.25,
-                          1.5,
-                          2.0
-                        ])
-                          ActionChip(
-                            label: Text(_speedLabel(r),
-                                style: const TextStyle(fontSize: 12)),
-                            onPressed: () {
-                              player.setRate(r);
-                              setSheet(() {});
-                            },
-                          ),
-                      ],
-                    ),
                     const SizedBox(height: 8),
-                    Text(
-                      '拖动即时生效 · 自动记住上次倍速',
-                      style: TextStyle(
-                          fontSize: 11, color: AppTheme.textSub),
-                    ),
                   ],
                 ),
               ),
@@ -962,8 +900,15 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  static String _speedLabel(double r) =>
-      '${r % 1 == 0 ? r.toStringAsFixed(1) : r.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '')}x';
+  /// 倍速文本：1.0 → "1.0x"，1.5 → "1.5x"，1.05 → "1.05x"。
+  /// 逐位剥尾零而不是正则一次性去 `0+$`，否则 "1.00" 会被去成 "1."。
+  static String _speedLabel(double r) {
+    var s = r.toStringAsFixed(2);
+    if (s.endsWith('0')) s = s.substring(0, s.length - 1);
+    if (s.endsWith('0')) s = s.substring(0, s.length - 1);
+    if (s.endsWith('.')) s = '${s}0';
+    return '${s}x';
+  }
 
   Widget _buildActionRow(BookPlayer player, {bool dense = false}) {
     return Padding(
@@ -986,12 +931,6 @@ class _PlayerPageState extends State<PlayerPage> {
               ),
             ),
             onPressed: () => _showSpeedSheet(player),
-          ),
-          ActionChip(
-            avatar: Icon(Icons.subtitles_outlined,
-                size: 16, color: AppTheme.accent),
-            label: const Text('文稿', style: TextStyle(fontSize: 12)),
-            onPressed: () => _openSubtitle(player),
           ),
           ActionChip(
             avatar: Icon(

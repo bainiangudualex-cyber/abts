@@ -45,9 +45,7 @@ dependencies:
   permission_handler: 11.3.1
   share_plus: ^12.0.1
   qr_flutter: ^4.1.0
-  # 自用改造版移除友盟统计：该 SDK 的 Kotlin 插件在 Flutter 3.47 / 新版 Kotlin
-  # 下编译失败（:umeng_common_sdk:compileReleaseKotlin），且本地自用不需要匿名统计。
-  # lib/services/umeng_analytics.dart 已改成同名空实现，调用点无需改动。
+  umeng_common_sdk: ^1.3.1
   path_provider: ^2.1.6
 
 dev_dependencies:

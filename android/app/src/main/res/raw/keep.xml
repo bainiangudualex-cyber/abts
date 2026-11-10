@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- audio_service 的通知小图标是运行时按资源名字符串查找的，
-     R8/资源压缩无法静态发现引用，会在 release 包里被裁掉。
-     这里显式 keep，否则通知图标会退回默认方块。 -->
-<resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/ic_audio_notif,@drawable/ic_stat_lyrics" />

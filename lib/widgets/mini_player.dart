@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/theme/app_theme.dart';
-import '../models/chapter.dart';
 import '../pages/player_page.dart';
 import '../player/book_player.dart';
 import '../widgets/book_cover.dart';
@@ -82,7 +81,7 @@ class _MiniPlayerState extends State<MiniPlayer>
                     ),
                     if (chapter != null)
                       Text(
-                        chapter.title,
+                        '第 ${chapter.page} 章 · ${chapter.part}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 11, color: AppTheme.textSub),

@@ -1,25 +1,21 @@
-# 「阿B听书·改」自用改造版云端构建。
+# 「阿B听书 · 滑轨倍速版」云端构建
 #
-# 下载请走 Releases（公开直链、无需登录、支持多线程/断点续传）：
-#   https://github.com/bainiangudualex-cyber/abts/releases/latest
-# 或固定直链：
-#   https://github.com/bainiangudualex-cyber/abts/releases/download/v1.2.2-custom/abts-custom-arm64.apk
+# 基线 = 原版 fengqiao57/abts v1.2.2，代码只改一处：
+#   lib/pages/player_page.dart 的 _showSpeedSheet —— 档位列表换成滑轨，
+#   0.05x 一档（0.5x ~ 3.0x）。其余文件与原版逐字节一致。
 #
-# 为什么只产一个 arm64 包：Actions artifact 需登录 + 临时签名 URL，
-# 单线程约 40~55KB/s，40MB 要十几分钟；Release asset 约 14MB 且能用
-# IDM / aria2 多线程加速。绝大多数手机都是 arm64-v8a。
-#
-# 包名已是 dev.pages.abts.custom，可与官方版同时安装，不需要卸载。
-# 注意：仓库没有 key.properties，产物用 debug 签名；每次 CI 生成的
-#       debug 证书不同，重装新包若提示「应用未安装」需先卸载旧包。
-name: Build 阿B听书·改 APK
+# ⚠️ 必须锁 Flutter 3.38.10（Dart 3.10.9）：
+#    原版 pubspec 要求 sdk ^3.10.8，且依赖 umeng_common_sdk 1.3.x。
+#    用当前 stable（3.47.x / Dart 3.13）会在 :umeng_common_sdk:compileReleaseKotlin
+#    因新版 Kotlin 不兼容而失败。锁版本 = 不必删依赖、不必改任何业务代码。
+name: Build 阿B听书 倍速版
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
 
-# 发 Release 需要写权限（默认 GITHUB_TOKEN 只有 read）
+# 发 Release 需要写权限
 permissions:
   contents: write
 
@@ -36,13 +32,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Flutter
+      - name: Set up Flutter 3.38.10
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.38.10'
           channel: stable
           cache: true
 
-      # 打印工具链，便于首次构建失败时定位版本不匹配
       - name: Show toolchain
         run: |
           flutter --version
@@ -52,45 +48,38 @@ jobs:
       - name: pub get
         run: flutter pub get
 
-      # 只构建 arm64：产物是单个 app-release.apk（约 14MB），
-      # 复制成固定文件名，方便 Release 直链长期使用。
+      # 只出 arm64 单包（约 40MB），绝大多数手机都是 arm64-v8a
       - name: Build release APK (arm64 only)
         run: |
           flutter build apk --release --target-platform android-arm64
-          APK=$(ls build/app/outputs/flutter-apk/*.apk | head -1)
-          cp "$APK" abts-custom-arm64.apk
-          ls -lh abts-custom-arm64.apk
+          cp build/app/outputs/flutter-apk/app-release.apk abts-speed-arm64.apk
+          ls -lh abts-speed-arm64.apk
 
-      - name: Upload artifact (备用)
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: abts-custom-apk
-          path: abts-custom-arm64.apk
+          name: abts-speed-apk
+          path: abts-speed-arm64.apk
           if-no-files-found: error
           retention-days: 30
 
-      # Release asset 是公开直链，无需登录、可多线程下载。
-      # ⚠️ 注意：`--clobber` 只属于 `gh release upload`，`gh release create`
-      #    没有这个 flag（传了会直接 unknown flag 退出 1）。所以这里必须
-      #    先判断 Release 是否存在，再分两条路走。
+      # Release asset 是公开直链，手机浏览器可直接下载、支持断点续传。
+      # 注意：--clobber 只属于 gh release upload，create 没有这个 flag。
       - name: Publish Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: v1.2.2-custom
-          APK: abts-custom-arm64.apk
+          TAG: v1.2.2-speed
+          APK: abts-speed-arm64.apk
         run: |
           set -euo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG 已存在 → 覆盖上传 artifact"
+            echo "Release $TAG 已存在 → 覆盖上传"
             gh release upload "$TAG" "$APK" --clobber
           else
             echo "Release $TAG 不存在 → 新建"
             gh release create "$TAG" "$APK" \
               --target "$GITHUB_SHA" \
-              --title "阿B听书·改（自用）" \
-              --notes "自用改造版：双开包名 / 网易云式通知 / 0.05 倍速 / SRT 文稿同步。仅 arm64-v8a。
-
-          安装说明：包名 dev.pages.abts.custom，可与官方版共存，无需卸载官方版。
-          签名为 CI debug 证书，每次构建证书不同；覆盖升级报「应用未安装」时先卸载旧包。"
+              --title "阿B听书 · 滑轨倍速版" \
+              --notes "原版 v1.2.2 基线，仅改一处：倍速弹窗由档位列表改为滑轨拖动，0.05x 一档（0.5x ~ 3.0x）。拖动能实时听到快慢变化，松手落定。包名 dev.pages.abts.custom，可与官方版共存。"
           fi
           echo "下载地址：$(gh release view "$TAG" --json url -q .url)"

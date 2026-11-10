@@ -45,27 +45,6 @@ class Book {
       .replaceAll('<em class="keyword">', '')
       .replaceAll('</em>', '');
 
-  /// 简洁书名，用于通知栏/锁屏这类空间紧张的位置。
-  ///
-  /// B 站视频标题普遍是 UP 主按 SEO 堆的关键词，例如
-  /// 「异度旅社（远瞳）克苏鲁 多人在有声剧」。整条塞到通知副标题上
-  /// 会比正文还长，和网易云那种「歌名 / 歌手」的两行结构完全不是一个观感。
-  /// 这里按以下顺序收敛，尽量不误伤：
-  ///   1. 去掉开头的【…】/[…] 标注（【完结】【合集】之类）
-  ///   2. 在第一个括号、竖线、斜杠处截断
-  ///   3. 在第一个空白处截断
-  /// 截断结果为空时回退到 cleanTitle，保证永远不会显示空白。
-  String get shortName {
-    final base = cleanTitle.trim();
-    if (base.isEmpty) return base;
-    var t = base.replaceFirst(RegExp(r'^\s*[【\[][^】\]]*[】\]]\s*'), '');
-    if (t.trim().isEmpty) t = base;
-    final beforeBracket = t.split(RegExp(r'[（(\[【|｜/]')).first.trim();
-    final firstWord = beforeBracket.split(RegExp(r'\s+')).first.trim();
-    final out = firstWord.isNotEmpty ? firstWord : beforeBracket;
-    return out.isNotEmpty ? out : base;
-  }
-
   /// 归一化封面地址：`//i0.hdslb.com/...` 与 http 源统一转 https
   static String normalizePic(String input) {
     final u = input.trim();

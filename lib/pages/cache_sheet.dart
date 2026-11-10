@@ -77,7 +77,7 @@ class _CacheSheetState extends State<CacheSheet> {
       if (cache.isCached(book.bvid, c.cid)) continue;
       items.add((
         cid: c.cid,
-        chapterTitle: c.shortTitle,
+        chapterTitle: '${c.page} · ${c.part}',
         durationSec: c.duration,
         page: c.page,
         part: c.part,
@@ -209,7 +209,7 @@ class _CacheSheetState extends State<CacheSheet> {
                           }),
                   dense: true,
                   title: Text(
-                    c.shortTitle,
+                    '${c.page} · ${c.part}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
