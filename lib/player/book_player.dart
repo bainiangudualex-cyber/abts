@@ -901,8 +901,11 @@ class BookPlayer extends ChangeNotifier {
     h.mediaItem.add(
       MediaItem(
         id: '${_book!.bvid}/${chapter.cid}',
-        title: chapter.title,
-        artist: _book!.cleanTitle,
+        // 网易云式两行结构：大标题放「在听哪本书」，小字放章节进度。
+        // 原版是「第 N 章 · 分P名」+ 整条视频标题，两行都在堆信息，
+        // 通知栏里既长又看不清重点。
+        title: _book!.shortName,
+        artist: chapter.title,
         album: _book!.cleanTitle,
         artUri: pic.isEmpty ? null : Uri.tryParse(pic),
         duration:
