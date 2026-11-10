@@ -70,14 +70,27 @@ jobs:
           retention-days: 30
 
       # Release asset 是公开直链，无需登录、可多线程下载。
-      # --clobber 让重复构建覆盖同一 tag 下的旧文件，不会失败。
+      # ⚠️ 注意：`--clobber` 只属于 `gh release upload`，`gh release create`
+      #    没有这个 flag（传了会直接 unknown flag 退出 1）。所以这里必须
+      #    先判断 Release 是否存在，再分两条路走。
       - name: Publish Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v1.2.2-custom
+          APK: abts-custom-arm64.apk
         run: |
-          gh release create v1.2.2-custom abts-custom-arm64.apk \
-            --target "$GITHUB_SHA" \
-            --title "阿B听书·改（自用）" \
-            --notes "自用改造版：双开包名 / 网易云式通知 / 0.05 倍速 / SRT 文稿同步。仅 arm64-v8a。" \
-            --clobber
-          gh release view v1.2.2-custom --json url -q .url
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG 已存在 → 覆盖上传 artifact"
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            echo "Release $TAG 不存在 → 新建"
+            gh release create "$TAG" "$APK" \
+              --target "$GITHUB_SHA" \
+              --title "阿B听书·改（自用）" \
+              --notes "自用改造版：双开包名 / 网易云式通知 / 0.05 倍速 / SRT 文稿同步。仅 arm64-v8a。
+
+          安装说明：包名 dev.pages.abts.custom，可与官方版共存，无需卸载官方版。
+          签名为 CI debug 证书，每次构建证书不同；覆盖升级报「应用未安装」时先卸载旧包。"
+          fi
+          echo "下载地址：$(gh release view "$TAG" --json url -q .url)"
