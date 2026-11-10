@@ -14,8 +14,10 @@ import '../core/theme/tv_mode.dart';
 import '../models/book.dart';
 import '../models/chapter.dart';
 import '../player/book_player.dart';
+import '../player/media_controls.dart';
 import '../utils/format.dart';
 import '../widgets/book_cover.dart';
+import '../widgets/subtitle_sheet.dart';
 import 'book_detail_page.dart';
 import 'cache_sheet.dart';
 
@@ -38,6 +40,19 @@ class _PlayerPageState extends State<PlayerPage> {
   BookPlayer? _playerRef;
 
   @override
+  void initState() {
+    super.initState();
+    // 通知栏「词」按钮 → 打开文稿面板（播放页已在前台时）
+    lyricRequest.addListener(_onLyricRequest);
+  }
+
+  void _onLyricRequest() {
+    final player = _playerRef;
+    if (!mounted || player == null) return;
+    _openSubtitle(player);
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _playerRef = context.read<BookPlayer>();
@@ -45,8 +60,18 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   void dispose() {
+    lyricRequest.removeListener(_onLyricRequest);
     _playerRef?.flushProgress();
     super.dispose();
+  }
+
+  /// 打开文稿同步面板
+  void _openSubtitle(BookPlayer player) {
+    final book = player.book;
+    final chapter = player.currentChapter;
+    if (book == null || chapter == null) return;
+    SubtitleSheet.show(context,
+        player: player, book: book, chapter: chapter);
   }
 
   @override
@@ -814,7 +839,18 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  /// 倍速弹窗：0.5x ~ 3.0x 档位，点一下即选中
+  /// 量化到 0.05 的整数倍，避免滑杆浮点误差出现 1.2300000001x
+  static double _snapRate(double v) {
+    final steps =
+        (v.clamp(BookPlayer.minRate, BookPlayer.maxRate) * 20).round();
+    return (steps / 20)
+        .clamp(BookPlayer.minRate, BookPlayer.maxRate)
+        .toDouble();
+  }
+
+  /// 倍速弹窗：0.5x~3.0x，0.05 步进。
+  /// 底层 BookPlayer.setRate 本来就收任意 double 并持久化，
+  /// 原版只是把 UI 砍成 11 个固定档位，这里把滑杆加回来。
   void _showSpeedSheet(BookPlayer player) {
     showModalBottomSheet<void>(
       context: context,
@@ -822,13 +858,14 @@ class _PlayerPageState extends State<PlayerPage> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setSheet) {
+            final rate = player.rate;
             return SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-                    child: Row(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
                       children: [
                         Text(
                           '播放速度',
@@ -840,50 +877,88 @@ class _PlayerPageState extends State<PlayerPage> {
                         ),
                         const Spacer(),
                         Text(
-                          '当前 ${player.rateLabel}',
+                          '步进 0.05',
                           style: TextStyle(
-                              fontSize: 13, color: AppTheme.accent),
+                              fontSize: 12, color: AppTheme.textSub),
                         ),
                       ],
                     ),
-                  ),
-                  Flexible(
-                    child: ListView(
-                      shrinkWrap: true,
+                    const SizedBox(height: 6),
+                    Text(
+                      '${rate.toStringAsFixed(2)}x',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.accent,
+                      ),
+                    ),
+                    Row(
                       children: [
-                        for (final r in BookPlayer.speedSteps)
-                          _speedTile(ctx, player, setSheet, r),
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          color: AppTheme.accent,
+                          onPressed: () {
+                            player.setRate(_snapRate(rate - 0.05));
+                            setSheet(() {});
+                          },
+                        ),
+                        Expanded(
+                          child: Slider(
+                            value: rate.clamp(
+                                BookPlayer.minRate, BookPlayer.maxRate),
+                            min: BookPlayer.minRate,
+                            max: BookPlayer.maxRate,
+                            divisions: 50,
+                            label: '${rate.toStringAsFixed(2)}x',
+                            onChanged: (v) {
+                              player.setRate(_snapRate(v));
+                              setSheet(() {});
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          color: AppTheme.accent,
+                          onPressed: () {
+                            player.setRate(_snapRate(rate + 0.05));
+                            setSheet(() {});
+                          },
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      children: [
+                        for (final r in const <double>[
+                          0.75,
+                          1.0,
+                          1.25,
+                          1.5,
+                          2.0
+                        ])
+                          ActionChip(
+                            label: Text(_speedLabel(r),
+                                style: const TextStyle(fontSize: 12)),
+                            onPressed: () {
+                              player.setRate(r);
+                              setSheet(() {});
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '拖动即时生效 · 自动记住上次倍速',
+                      style: TextStyle(
+                          fontSize: 11, color: AppTheme.textSub),
+                    ),
+                  ],
+                ),
               ),
             );
           },
         );
-      },
-    );
-  }
-
-  Widget _speedTile(
-      BuildContext ctx, BookPlayer player, StateSetter setSheet, double r) {
-    final active = (r - player.rate).abs() < 0.001;
-    return ListTile(
-      title: Text(
-        _speedLabel(r),
-        style: TextStyle(
-          fontSize: 15,
-          color: active ? AppTheme.accent : AppTheme.textMain,
-          fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-        ),
-      ),
-      trailing: active
-          ? const Icon(Icons.check, color: AppTheme.accent)
-          : null,
-      onTap: () {
-        player.setRate(r);
-        setSheet(() {});
       },
     );
   }
@@ -912,6 +987,12 @@ class _PlayerPageState extends State<PlayerPage> {
               ),
             ),
             onPressed: () => _showSpeedSheet(player),
+          ),
+          ActionChip(
+            avatar: Icon(Icons.subtitles_outlined,
+                size: 16, color: AppTheme.accent),
+            label: const Text('文稿', style: TextStyle(fontSize: 12)),
+            onPressed: () => _openSubtitle(player),
           ),
           ActionChip(
             avatar: Icon(

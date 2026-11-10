@@ -17,6 +17,7 @@ import '../models/chapter.dart';
 import '../services/audio_focus.dart';
 import '../services/bili_api.dart';
 import '../services/umeng_analytics.dart';
+import 'media_controls.dart';
 
 /// 从缓存页播放一集的结果
 ///
@@ -167,9 +168,14 @@ class BookPlayer extends ChangeNotifier {
   }
 
   /// 在档位间循环切换倍速（播放页一键）
+  /// 倍速现在允许 0.05 步进的任意值，_rate 很可能不在 speedSteps 里；
+  /// 原实现 idx=-1 会直接跳到 0.5x，这里改成找「比当前大的最小档位」，
+  /// 到 3.0x 后回到 0.5x。
   Future<void> cycleSpeed() async {
-    final idx = speedSteps.indexWhere((e) => (e - _rate).abs() < 0.001);
-    final next = speedSteps[(idx + 1) % speedSteps.length];
+    final next = speedSteps.firstWhere(
+      (e) => e > _rate + 0.001,
+      orElse: () => speedSteps.first,
+    );
     await setRate(next);
   }
 
@@ -934,22 +940,11 @@ class BookPlayer extends ChangeNotifier {
 
     h.playbackState.add(
       PlaybackState(
-        controls: [
-          MediaControl.skipToPrevious,
-          MediaControl.rewind,
-          playing ? MediaControl.pause : MediaControl.play,
-          MediaControl.fastForward,
-          MediaControl.skipToNext,
-        ],
-        systemActions: {
-          MediaAction.seek,
-          MediaAction.seekForward,
-          MediaAction.seekBackward,
-          MediaAction.play,
-          MediaAction.pause,
-          MediaAction.stop,
-        },
-        androidCompactActionIndices: const [0, 1, 2],
+        // 与 BiliAudioHandler 共用同一套控件定义，避免两处写法漂移
+        // 导致播放/暂停图标不翻转（网易云式三键 + 「词」）
+        controls: mediaControls(playing),
+        systemActions: mediaSystemActions,
+        androidCompactActionIndices: mediaCompactIndices,
         processingState: processing,
         playing: playing,
         updatePosition: pos,
@@ -957,6 +952,10 @@ class BookPlayer extends ChangeNotifier {
       ),
     );
   }
+
+  /// 通知栏按钮点击后由 BiliAudioHandler 调用：立刻补推一次权威状态，
+  /// 校正乐观更新的图标（media_kit 的 playing 状态异步落地）。
+  void notifyPlayState() => _pushState(force: true);
 
   // ---------- 播放控制 ----------
   void togglePlay() {

@@ -31,7 +31,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.pages.abts"
+        // 自用改造版：改 applicationId 让本包与官方版「阿B听书」并存安装，
+        // 不必卸载官方版。namespace 保持 dev.pages.abts 不变（Kotlin 包名、
+        // R 类与 AndroidManifest 里的 .MainActivity 都基于 namespace）。
+        // 代价：两个应用数据隔离，书架/进度不共享（SharedPreferences 按包名分区）。
+        applicationId = "dev.pages.abts.custom"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

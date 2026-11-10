@@ -73,10 +73,23 @@ Future<void> _bootstrap() async {
     final handler = await AudioService.init(
       builder: () => BiliAudioHandler(),
       config: const AudioServiceConfig(
-        androidNotificationChannelId: 'dev.pages.abts.channel.audio',
-        androidNotificationChannelName: '阿B听书',
+        // 自用改造版独立渠道 id，避免与官方版通知渠道名混淆
+        androidNotificationChannelId: 'dev.pages.abts.custom.channel.audio',
+        androidNotificationChannelName: '阿B听书·改',
         androidNotificationChannelDescription: '播放有声小说',
-        androidNotificationIcon: 'mipmap/ic_launcher',
+        // 🔴 白色单色剪影。原版用 mipmap/ic_launcher（彩色启动图标），
+        // Android 5.0+ 会给通知小图标强制加纯色蒙版，只认 alpha 轮廓，
+        // 结果渲染成一块纯白/灰方块 —— 这就是「通知栏太丑」的根因。
+        androidNotificationIcon: 'drawable/ic_audio_notif',
+        // 媒体通知强调色（网易云是红色；想换回 B 站蓝改成 0xFF2E80C9）
+        notificationColor: Color(0xFFC62828),
+        androidShowNotificationBadge: false,
+        // 封面降采样，避免大图进通知栏拖慢 / 内存抖动
+        artDownscaleWidth: 320,
+        artDownscaleHeight: 320,
+        // 与 BookPlayer.seekRelative(15) 保持一致
+        fastForwardInterval: Duration(seconds: 15),
+        rewindInterval: Duration(seconds: 15),
         // 暂停（含来电打断）时保留前台服务与通知，避免打断后通知栏直接消失。
         // 注意：audio_service 要求此时 androidNotificationOngoing 必须为 false。
         androidNotificationOngoing: false,
@@ -85,6 +98,9 @@ Future<void> _bootstrap() async {
       ),
     ).timeout(const Duration(seconds: 6));
     player.attachHandler(handler);
+    // 通知栏「词」按钮的响应放在 BiliAudioHandler.customAction 里，
+    // 通过 player/media_controls.dart 的 lyricRequest 通知 UI，
+    // 不依赖 handler.customEvent 的接口形态（降低跨版本编译风险）。
   } catch (e) {
     debugPrint('[main] audio service init failed: $e');
   }
