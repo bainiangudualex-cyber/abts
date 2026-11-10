@@ -6,14 +6,7 @@
 -keep class dev.fluttercommunity.plus.** { *; }
 -keep class io.flutter.plugins.** { *; }
 
-# 友盟统计 SDK（官方要求的 keep）
--keep class com.umeng.** { *; }
--keep class com.efs.** { *; }
--keep class com.uc.** { *; }
--keep class com.zui.** { *; }
--keep class com.fat.** { *; }
--dontwarn com.umeng.**
--dontwarn com.efs.**
+# 自用改造版已移除友盟统计，相关 keep / dontwarn 一并清理
 -keepclassmembers class * {
     public <init>(org.json.JSONObject);
 }
